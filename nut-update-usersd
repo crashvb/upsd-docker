@@ -1,0 +1,11 @@
+#!/bin/bash
+
+set -e
+
+source /usr/local/lib/entrypoint.sh
+
+path=$NUT_CONFPATH/upsd.users
+
+log "Generating: $path ..."
+cat $NUT_CONFPATH/{upsd.users.dist,users.d/*.conf} | envsubst > $path
+

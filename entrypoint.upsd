@@ -1,0 +1,128 @@
+#!/bin/bash
+
+set -e
+
+# Configure: upsd
+if [[ ! -e "$EP_RUN" ]] ; then
+	log "Configuring $(basename $0) for first run ..."
+
+	# Note: Key size must be >= 3072 for "HIGH" security:
+	#	https://www.gnutls.org/manual/html_node/Selecting-cryptographic-key-sizes.html#tab_003akey_002dsizes#
+
+	export UPSD_CERT_DAYS=${UPSD_CERT_DAYS:-30}
+	export UPSD_KEY_SIZE=${UPSD_KEY_SIZE:-4096}
+
+	# Generate keypairs ...
+	if [[ -e $EP_SECRETS_ROOT/upsdca.crt && -e $EP_SECRETS_ROOT/upsd.crt && -e $EP_SECRETS_ROOT/upsd.key ]] ; then
+		log "Importing upsdca.crt, upsd.crt, and upsd.key from secrets ..."
+	else
+		log "Generating upsdca.crt, upsd.crt, and upsd.key in secrets ..."
+
+		log "	certificate authority"
+		openssl genrsa \
+			-out /dev/shm/upsdca.key \
+			$UPSD_KEY_SIZE
+		openssl req \
+			-days $UPSD_CERT_DAYS \
+			-key /dev/shm/upsdca.key \
+			-new \
+			-nodes \
+			-out $EP_SECRETS_ROOT/upsdca.crt \
+			-sha256 \
+			-subj "/cn=upsd root ca" \
+			-x509
+
+		log "	server certificate"
+		openssl genrsa \
+			-out $EP_SECRETS_ROOT/upsd.key \
+			$UPSD_KEY_SIZE
+		openssl req \
+			-key $EP_SECRETS_ROOT/upsd.key \
+			-new \
+			-nodes \
+			-out /dev/shm/upsd.csr \
+			-sha256 \
+			-subj "/CN=$(hostname --fqdn)"
+		openssl x509 \
+			-CA $EP_SECRETS_ROOT/upsdca.crt \
+			-CAkey /dev/shm/upsdca.key \
+			-CAcreateserial \
+			-days $UPSD_CERT_DAYS \
+			-in /dev/shm/upsd.csr \
+			-out $EP_SECRETS_ROOT/upsd.crt \
+			-req \
+			-sha256
+
+		rm /dev/shm/{upsdca.key,upsd.csr} $EP_SECRETS_ROOT/upsdca.srl
+
+	fi
+	install --group=ssl-cert --mode=0640 --owner=root $EP_SECRETS_ROOT/upsd.key /etc/ssl/private/
+	install --group=root --mode=0644 --owner=root $EP_SECRETS_ROOT/upsd{,ca}.crt /etc/ssl/certs/
+
+	ln --symbolic /etc/ssl/certs/upsdca.crt /usr/share/ca-certificates/
+	echo upsdca.crt >> /etc/ca-certificates.conf
+	update-ca-certificates
+
+	if [[ ! -e $NUT_CONFPATH/nut.conf ]] ; then
+		log "Initializing data volume ..."
+		cp --no-clobber --recursive /usr/local/share/nut/config/* $NUT_CONFPATH/
+
+		log "Adapting configuration files ..."
+		log "	ups.conf"
+		cp --preserve $NUT_CONFPATH/ups.conf $NUT_CONFPATH/ups.conf.dist
+		for conf in ${!UPSD_CONFD_@}; do
+			[[ "X${!conf}" == "X" ]] && continue
+
+			name="${conf,,}.conf"
+			name="${name#"upsd_confd_"}"
+			[[ "X$name" == "X" ]] && continue
+
+			log "		$name"
+			echo "${!conf}" | envsubst > $NUT_CONFPATH/conf.d/${name}
+		done
+
+		log "	upsd.users"
+		cp --preserve $NUT_CONFPATH/upsd.users $NUT_CONFPATH/upsd.users.dist
+		for user in ${!UPSD_USERSD_@}; do
+			[[ "X${!user}" == "X" ]] && continue
+
+			name="${user,,}.conf"
+			name="${name#"upsd_usersd_"}"
+			password="${user,,}"
+			password="${password#"upsd_usersd_"}"
+			[[ "X$name" == "X" ]] && continue
+
+			log "		$name"
+			generate_password "upsd_${password}"
+			echo "${!user}" > $NUT_CONFPATH/users.d/${name}
+		done
+
+		log "Applying ownership and permissions ..."
+		find $NUT_CONFPATH \( \! -user root -o \! -group nut \) -exec chown root:nut {} \;
+		chmod 0640 $NUT_CONFPATH/*
+	else
+		log "Skipping data volume initialization ..."
+	fi
+fi
+
+nut-update-confd
+nut-update-usersd
+
+log "Resetting lock file ..."
+echo "0" | install --group nut --mode 0644 --owner nut /dev/stdin /run/nut/upsd.pid
+
+log "Making device nodes ..."
+for lines in ${!UPSD_MKNOD@}; do
+	[[ "X${!lines}" == "X" ]] && continue
+
+	while IFS= read -r line; do
+		IFS=, read name typ major minor mode owner group <<< "$line"
+		[[ "X${group}" == "X" ]] && continue
+
+		log "		$name"
+		mknod --mode="$mode" "$name" "$typ" "$major" "$minor"
+		chown "${owner}:${group}" "$name"
+		ls -l "$name"
+	done <<< "${!lines}"
+done
+

@@ -1,0 +1,11 @@
+#!/bin/bash
+
+set -e
+
+source /usr/local/lib/entrypoint.sh
+
+path=$NUT_CONFPATH/ups.conf
+
+log "Generating: $path ..."
+cat $NUT_CONFPATH/{ups.conf.dist,conf.d/*.conf} > $path
+
