@@ -93,7 +93,7 @@ if [[ ! -e "$EP_RUN" ]] ; then
 			[[ "X$name" == "X" ]] && continue
 
 			log "		$name"
-			generate_password "upsd_${password}"
+			generate_password "${password}"
 			echo "${!user}" > $NUT_CONFPATH/users.d/${name}
 		done
 
