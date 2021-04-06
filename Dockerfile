@@ -5,14 +5,14 @@ LABEL maintainer "Richard Davis <crashvb@gmail.com>"
 RUN docker-apt libnss3-tools nut-server ssl-cert
 
 # Configure: upsd
-ENV NUT_CONFPATH=/etc/nut
+ENV NUT_CONFPATH=/etc/nut UPSD_NSS_PATH=/etc/nut/nss
 ADD nut-* /usr/local/bin/
 RUN usermod --append --groups ssl-cert nut && \
 	install --directory --group=root --mode=0775 --owner=root ${NUT_CONFPATH}/conf.d/ ${NUT_CONFPATH}/users.d/ /usr/local/share/nut && \
 	sed --expression="/^MODE=/s/none/netserver/" \
 		--in-place=.dist ${NUT_CONFPATH}/nut.conf && \
 	sed --expression="/^# you'll need to restart upsd/a LISTEN 0.0.0.0 3493" \
-		--expression="/^# CERTPATH \/usr/cCERTPATH /etc/nut/nss" \
+		--expression="/^# CERTPATH \/usr/cCERTPATH ${UPSD_NSS_PATH}" \
 		--in-place=.dist ${NUT_CONFPATH}/upsd.conf && \
 	mv ${NUT_CONFPATH}/upsmon.conf ${NUT_CONFPATH}/upsmon.conf.dist && \
 	mv ${NUT_CONFPATH} /usr/local/share/nut/config

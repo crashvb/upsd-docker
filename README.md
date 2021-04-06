@@ -97,6 +97,7 @@ The embedded entrypoint script is located at `/etc/entrypoint.d/upsd` and perfor
  | UPSD_CONFD_* | | The contents of `<nut_confpath>/conf.d/*.conf`. For example, `UPSD_CONFD_FOO` will create `<nut_confpath>/conf.d/foo.conf`. The contents of this directory will be used to generate `<nut_confpath>/ups.conf`. |
  | UPSD_KEY_SIZE | 4096 | Key size of any generated PKI keys. |
  | UPSD_CONFD_* | | The contents of `<nut_confpath>/conf.d/*.conf`. For example, `UPSD_CONFD_FOO` will create `<nut_confpath>/conf.d/foo.conf`. The contents of this directory will be used to generate `<nut_confpath>/ups.conf`. |
+ | UPSD_NSS_PATH | `<nut_confpath>/nss` | The path to the NSS database. |
  | UPSD_USERSD_* | | The contents of `<nut_confpath>/users.d/*.conf`. For example, `UPSD_USERSD_FOO` will create `<nut_confpath>/users.d/foo.conf`. The contents of this directory will be used to generate `<nut_confpath>/upsd.users`. |
 
 2. Volume permissions are normalized.
@@ -115,6 +116,7 @@ The embedded entrypoint script is located at `/etc/entrypoint.d/upsd` and perfor
 │        └─ upsd.conf
 ├─ run/
 │  └─ secrets/
+│     ├─ nss_password
 │     ├─ upsd.crt
 │     ├─ upsd.key
 │     ├─ upsdca.crt
