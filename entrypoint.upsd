@@ -67,6 +67,24 @@ if [[ ! -e "$EP_RUN" ]] ; then
 		log "Initializing data volume ..."
 		cp --no-clobber --recursive /usr/local/share/nut/config/* $NUT_CONFPATH/
 
+		log "Initializing trust and keystores ..."
+		# https://networkupstools.org/docs/user-manual.chunked/ar01s09.html
+		# "SSL support should be considered stable but purposely under-documented" ... oh, okay! This totally makes it okay =/
+		generate_password nss
+
+		path_nss=$NUT_CONFPATH/nss
+		tmp=$(mktemp)
+		install --directory --group=ssl-cert --mode=750 --owner=root $path_nss
+		certutil -d $path_nss -N --empty-password
+		openssl pkcs12 -export -certfile /etc/ssl/certs/upsdca.crt -in /etc/ssl/certs/upsd.crt -inkey /etc/ssl/private/upsd.key -out $tmp -password "pass:${NSS_PASSWORD}"
+		pk12util -d $path_nss -i $tmp -W "${NSS_PASSWORD}"
+		certutil -d $path_nss -L | egrep --invert-match "Trust Attributes|SSL,|u," | awk -F"  " '{print $1}' | sed --expression="/^$/d" | \
+			while IFS=$'\n' read name ; do
+				certutil -d $path_nss -M -n "$name" -t "TC,,"
+			done
+		certutil -d $path_nss -L
+		rm --force $tmp
+
 		log "Adapting configuration files ..."
 		log "	ups.conf"
 		cp --preserve $NUT_CONFPATH/ups.conf $NUT_CONFPATH/ups.conf.dist
@@ -97,9 +115,17 @@ if [[ ! -e "$EP_RUN" ]] ; then
 			echo "${!user}" > $NUT_CONFPATH/users.d/${name}
 		done
 
+		log "	upsd.conf"
+		identity=$(certutil -d $path_nss -L | egrep --invert-match "Trust Attributes|SSL,|CT," | awk -F"  " '{print $1}' | sed --expression="/^$/d")
+		sed --expression="/^# CERTIDENT \"my/cCERTIDENT \"$identity\" \"$NSS_PASSWORD\"" \
+			--expression="/^# CERTREQUEST REQUIRE/cCERTREQUEST 2" \
+			--in-place ${NUT_CONFPATH}/upsd.conf
+
+
 		log "Applying ownership and permissions ..."
 		find $NUT_CONFPATH \( \! -user root -o \! -group nut \) -exec chown root:nut {} \;
-		chmod 0640 $NUT_CONFPATH/*
+		find $NUT_CONFPATH -type d \! -perm -0750 -exec chmod 0750 {} \;
+		find $NUT_CONFPATH -type f \! -perm -0640 -exec chmod 0640 {} \;
 	else
 		log "Skipping data volume initialization ..."
 	fi

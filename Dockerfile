@@ -2,7 +2,7 @@ FROM crashvb/supervisord:202103212252
 LABEL maintainer "Richard Davis <crashvb@gmail.com>"
 
 # Install packages, download files ...
-RUN docker-apt nut-server ssl-cert
+RUN docker-apt libnss3-tools nut-server ssl-cert
 
 # Configure: upsd
 ENV NUT_CONFPATH=/etc/nut
@@ -12,6 +12,7 @@ RUN usermod --append --groups ssl-cert nut && \
 	sed --expression="/^MODE=/s/none/netserver/" \
 		--in-place=.dist ${NUT_CONFPATH}/nut.conf && \
 	sed --expression="/^# you'll need to restart upsd/a LISTEN 0.0.0.0 3493" \
+		--expression="/^# CERTPATH \/usr/cCERTPATH /etc/nut/nss" \
 		--in-place=.dist ${NUT_CONFPATH}/upsd.conf && \
 	mv ${NUT_CONFPATH}/upsmon.conf ${NUT_CONFPATH}/upsmon.conf.dist && \
 	mv ${NUT_CONFPATH} /usr/local/share/nut/config
