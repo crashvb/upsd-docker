@@ -117,7 +117,7 @@ if [[ ! -e "$EP_RUN" ]] ; then
 		log "	upsd.conf"
 		identity=$(certutil -d ${UPSD_NSS_PATH} -L | egrep --invert-match "Trust Attributes|SSL,|CT," | awk -F"  " '{print $1}' | sed --expression="/^$/d")
 		sed --expression="/^# CERTIDENT \"my/cCERTIDENT \"$identity\" \"$NSS_PASSWORD\"" \
-			--expression="/^# CERTREQUEST REQUIRE/cCERTREQUEST 2" \
+			--expression="/^# CERTREQUEST REQUIRE/s/^# //" \
 			--in-place ${NUT_CONFPATH}/upsd.conf
 
 		log "Applying ownership and permissions ..."
