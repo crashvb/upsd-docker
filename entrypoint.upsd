@@ -113,11 +113,13 @@ if [[ ! -e "$EP_RUN" ]] ; then
 			generate_password "${password}"
 			echo "${!user}" > $NUT_CONFPATH/users.d/${name}
 		done
+		nut-update-usersd
 
 		log "	upsd.conf"
 		identity=$(certutil -d ${UPSD_NSS_PATH} -L | egrep --invert-match "Trust Attributes|SSL,|CT," | awk -F"  " '{print $1}' | sed --expression="/^$/d")
 		sed --expression="/^# CERTIDENT \"my/cCERTIDENT \"$identity\" \"$NSS_PASSWORD\"" \
 			--in-place ${NUT_CONFPATH}/upsd.conf
+		nut-update-confd
 
 		log "Applying ownership and permissions ..."
 		find $NUT_CONFPATH \( \! -user root -o \! -group nut \) -exec chown root:nut {} \;
@@ -127,9 +129,6 @@ if [[ ! -e "$EP_RUN" ]] ; then
 		log "Skipping data volume initialization ..."
 	fi
 fi
-
-nut-update-confd
-nut-update-usersd
 
 log "Resetting lock file ..."
 echo "0" | install --group nut --mode 0644 --owner nut /dev/stdin /run/nut/upsd.pid
